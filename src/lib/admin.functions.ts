@@ -97,7 +97,8 @@ export const adminDelete = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     assertAdmin(data.password);
     const col = data.table === "site_content" ? "key" : "id";
-    const { error } = await supabaseAdmin.from(data.table as TableName).delete().eq(col, data.id);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabaseAdmin.from(data.table) as any).delete().eq(col, data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
