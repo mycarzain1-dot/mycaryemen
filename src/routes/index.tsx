@@ -22,6 +22,10 @@ export const Route = createFileRoute("/")({
     meta: [
       { title: "MY CAR — مركز متكامل للعناية بالسيارات" },
       { name: "description", content: "متجر إلكتروني وخدمات احترافية للسيارات: PPF، نانو سيراميك، اكسسوارات، منظفات وعطور." },
+      { property: "og:title", content: "MY CAR — مركز متكامل للعناية بالسيارات" },
+      { property: "og:description", content: "متجر إلكتروني وخدمات احترافية للسيارات: PPF، نانو سيراميك، اكسسوارات، منظفات وعطور." },
+      { property: "og:url", content: "https://mycaryemen.lovable.app/" },
+      { property: "og:type", content: "website" },
     ],
   }),
   loader: ({ context }) => {

@@ -12,6 +12,10 @@ export const Route = createFileRoute("/offers")({
     meta: [
       { title: "العروض — MY CAR" },
       { name: "description", content: "بكجات وعروض حصرية على خدمات ومنتجات MY CAR — استفد قبل انتهاء العرض." },
+      { property: "og:title", content: "العروض — MY CAR" },
+      { property: "og:description", content: "بكجات وعروض حصرية على خدمات ومنتجات MY CAR — استفد قبل انتهاء العرض." },
+      { property: "og:url", content: "https://mycaryemen.lovable.app/offers" },
+      { property: "og:type", content: "website" },
     ],
   }),
   loader: ({ context }) => context.queryClient.ensureQueryData(packagesQO),

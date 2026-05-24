@@ -4,7 +4,16 @@ import { useCart } from "@/lib/cart";
 import { Minus, Plus, Trash2, ShoppingBag } from "lucide-react";
 
 export const Route = createFileRoute("/cart")({
-  head: () => ({ meta: [{ title: "السلة — MY CAR" }] }),
+  head: () => ({
+    meta: [
+      { title: "السلة — MY CAR" },
+      { name: "description", content: "راجع منتجاتك في السلة وأكمل الطلب بسهولة عبر MY CAR." },
+      { property: "og:title", content: "السلة — MY CAR" },
+      { property: "og:description", content: "راجع منتجاتك في السلة وأكمل الطلب بسهولة عبر MY CAR." },
+      { property: "og:url", content: "https://mycaryemen.lovable.app/cart" },
+      { property: "og:type", content: "website" },
+    ],
+  }),
   component: CartPage,
 });
 

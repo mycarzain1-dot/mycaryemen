@@ -9,6 +9,10 @@ export const Route = createFileRoute("/contact")({
     meta: [
       { title: "اتصل بنا — MY CAR" },
       { name: "description", content: "تواصل مع ماي كار في صنعاء - حدة - شارع صفر - جوار مستشفى إسراء. أوقات العمل السبت-الخميس 9ص-11م." },
+      { property: "og:title", content: "اتصل بنا — MY CAR" },
+      { property: "og:description", content: "تواصل مع ماي كار في صنعاء - حدة - شارع صفر - جوار مستشفى إسراء. أوقات العمل السبت-الخميس 9ص-11م." },
+      { property: "og:url", content: "https://mycaryemen.lovable.app/contact" },
+      { property: "og:type", content: "website" },
     ],
   }),
   component: ContactPage,

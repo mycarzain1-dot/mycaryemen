@@ -9,6 +9,10 @@ export const Route = createFileRoute("/vip")({
     meta: [
       { title: "VIP — خدمة الفريق المتنقل — MY CAR" },
       { name: "description", content: "فريق MY CAR المتنقل يصلك أينما كنت في صنعاء — كراج كامل + إضاءة + كهرباء." },
+      { property: "og:title", content: "VIP — خدمة الفريق المتنقل — MY CAR" },
+      { property: "og:description", content: "فريق MY CAR المتنقل يصلك أينما كنت في صنعاء — كراج كامل + إضاءة + كهرباء." },
+      { property: "og:url", content: "https://mycaryemen.lovable.app/vip" },
+      { property: "og:type", content: "website" },
     ],
   }),
   component: VipPage,

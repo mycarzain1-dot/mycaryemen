@@ -7,6 +7,10 @@ export const Route = createFileRoute("/about")({
     meta: [
       { title: "من نحن — MY CAR" },
       { name: "description", content: "ماي كار - مركز متكامل للعناية بالسيارات في صنعاء يقدم خدمات احترافية وقطع وإكسسوارات أصلية." },
+      { property: "og:title", content: "من نحن — MY CAR" },
+      { property: "og:description", content: "ماي كار - مركز متكامل للعناية بالسيارات في صنعاء يقدم خدمات احترافية وقطع وإكسسوارات أصلية." },
+      { property: "og:url", content: "https://mycaryemen.lovable.app/about" },
+      { property: "og:type", content: "website" },
     ],
   }),
   component: AboutPage,

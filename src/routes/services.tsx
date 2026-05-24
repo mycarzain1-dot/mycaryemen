@@ -11,6 +11,10 @@ export const Route = createFileRoute("/services")({
     meta: [
       { title: "الخدمات — MY CAR" },
       { name: "description", content: "خدمات احترافية للعناية بسيارتك: PPF، نانو سيراميك، تنجيد، سمكرة ورش، كهرباء، واكسسوارات." },
+      { property: "og:title", content: "الخدمات — MY CAR" },
+      { property: "og:description", content: "خدمات احترافية للعناية بسيارتك: PPF، نانو سيراميك، تنجيد، سمكرة ورش، كهرباء، واكسسوارات." },
+      { property: "og:url", content: "https://mycaryemen.lovable.app/services" },
+      { property: "og:type", content: "website" },
     ],
   }),
   loader: ({ context }) => context.queryClient.ensureQueryData(servicesQO),

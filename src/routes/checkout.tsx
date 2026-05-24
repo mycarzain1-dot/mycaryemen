@@ -10,7 +10,16 @@ import { whatsappLink } from "@/lib/whatsapp";
 import { Copy, Check, ShoppingBag } from "lucide-react";
 
 export const Route = createFileRoute("/checkout")({
-  head: () => ({ meta: [{ title: "إتمام الطلب — MY CAR" }] }),
+  head: () => ({
+    meta: [
+      { title: "إتمام الطلب — MY CAR" },
+      { name: "description", content: "أكمل بيانات الطلب والدفع عبر المحافظ الإلكترونية لـ MY CAR." },
+      { property: "og:title", content: "إتمام الطلب — MY CAR" },
+      { property: "og:description", content: "أكمل بيانات الطلب والدفع عبر المحافظ الإلكترونية لـ MY CAR." },
+      { property: "og:url", content: "https://mycaryemen.lovable.app/checkout" },
+      { property: "og:type", content: "website" },
+    ],
+  }),
   component: CheckoutPage,
 });
 
