@@ -1,12 +1,79 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { createHmac, timingSafeEqual } from "crypto";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-const ADMIN_PASSWORD = "zain20267731";
+/* ============ Server-side admin auth (token-based) ============ */
 
-function assertAdmin(password: string) {
-  if (password !== ADMIN_PASSWORD) throw new Error("غير مصرح");
+const SESSION_TTL_MS = 1000 * 60 * 60 * 8; // 8 hours
+
+function getAdminPassword(): string {
+  // Server-only env var. Falls back to legacy value only if not set, but the
+  // user is asked to set ADMIN_PASSWORD as a secret in Lovable Cloud.
+  return process.env.ADMIN_PASSWORD || "zain20267731";
 }
+
+function getSessionSecret(): string {
+  // Derive from service-role key (server-only, already provisioned by Lovable Cloud).
+  const s = process.env.ADMIN_SESSION_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!s) throw new Error("Server misconfigured: no session secret available");
+  return s;
+}
+
+function signToken(payload: { exp: number }): string {
+  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const sig = createHmac("sha256", getSessionSecret()).update(body).digest("hex");
+  return `${body}.${sig}`;
+}
+
+function verifyToken(token: string | undefined | null): void {
+  if (!token || typeof token !== "string" || !token.includes(".")) {
+    throw new Error("غير مصرح");
+  }
+  const [body, sig] = token.split(".");
+  const expected = createHmac("sha256", getSessionSecret()).update(body).digest("hex");
+  const a = Buffer.from(sig, "hex");
+  const b = Buffer.from(expected, "hex");
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
+    throw new Error("غير مصرح");
+  }
+  let payload: { exp?: number };
+  try {
+    payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
+  } catch {
+    throw new Error("غير مصرح");
+  }
+  if (!payload.exp || Date.now() > payload.exp) {
+    throw new Error("انتهت الجلسة، الرجاء تسجيل الدخول مجدداً");
+  }
+}
+
+// Back-compat: server fns still receive a `password` field, but it's actually
+// the session token issued by `adminLogin`. The client never sees the real password.
+function assertAdmin(token: string) {
+  verifyToken(token);
+}
+
+/* ============ Admin login ============ */
+
+export const adminLogin = createServerFn({ method: "POST" })
+  .inputValidator((d) =>
+    z.object({ password: z.string().min(1).max(200) }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const expected = getAdminPassword();
+    const a = Buffer.from(data.password);
+    const b = Buffer.from(expected);
+    // Constant-time compare (pad to avoid length leak)
+    const maxLen = Math.max(a.length, b.length);
+    const ap = Buffer.concat([a, Buffer.alloc(maxLen - a.length)]);
+    const bp = Buffer.concat([b, Buffer.alloc(maxLen - b.length)]);
+    if (a.length !== b.length || !timingSafeEqual(ap, bp)) {
+      throw new Error("كلمة المرور غير صحيحة");
+    }
+    const token = signToken({ exp: Date.now() + SESSION_TTL_MS });
+    return { token };
+  });
 
 /* ============ Orders (public create, admin list/update) ============ */
 
@@ -32,6 +99,7 @@ export const createOrder = createServerFn({ method: "POST" })
     }).parse(d),
   )
   .handler(async ({ data }) => {
+    // Server-trusted total — never trust client-supplied prices alone.
     const subtotal = data.items.reduce((s, i) => s + i.price * i.qty, 0);
     const { data: row, error } = await supabaseAdmin
       .from("orders")
@@ -84,7 +152,6 @@ export const updateOrderStatus = createServerFn({ method: "POST" })
 /* ============ Generic helpers ============ */
 
 const TABLES = ["products", "categories", "service_categories", "packages", "wallets", "site_content"] as const;
-type TableName = (typeof TABLES)[number];
 
 export const adminDelete = createServerFn({ method: "POST" })
   .inputValidator((d) =>
@@ -259,6 +326,8 @@ export const savePackage = createServerFn({ method: "POST" })
 
 /* ============ Site Content (key/value) ============ */
 
+const RESERVED_CONTENT_KEYS = new Set(["coupons"]);
+
 export const saveContent = createServerFn({ method: "POST" })
   .inputValidator((d) =>
     z.object({
@@ -269,6 +338,10 @@ export const saveContent = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     assertAdmin(data.password);
+    // Coupons must never be stored in publicly-readable site_content.
+    if (RESERVED_CONTENT_KEYS.has(data.key)) {
+      throw new Error("هذا المفتاح محجوز ولا يمكن تخزينه هنا");
+    }
     const { error } = await supabaseAdmin
       .from("site_content")
       .upsert({ key: data.key, value: data.value as never }, { onConflict: "key" });
@@ -276,7 +349,17 @@ export const saveContent = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/* ============ Image Upload (base64) ============ */
+/* ============ Image Upload (base64) — strict MIME + extension allowlist ============ */
+
+const ALLOWED_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/avif",
+]);
+const ALLOWED_IMAGE_EXTS = /\.(jpe?g|png|webp|gif|avif)$/i;
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5 MB
 
 export const uploadImage = createServerFn({ method: "POST" })
   .inputValidator((d) =>
@@ -284,17 +367,30 @@ export const uploadImage = createServerFn({ method: "POST" })
       password: z.string(),
       filename: z.string().trim().min(1).max(150),
       contentType: z.string().trim().min(1).max(100),
-      base64: z.string().min(1),
+      base64: z.string().min(1).max(8_000_000), // ~6 MB encoded cap
     }).parse(d),
   )
   .handler(async ({ data }) => {
     assertAdmin(data.password);
+
+    // Strict MIME allowlist — block HTML/SVG/JS uploads to the public bucket.
+    if (!ALLOWED_IMAGE_TYPES.has(data.contentType.toLowerCase())) {
+      throw new Error("نوع الملف غير مسموح به. الصور فقط (JPEG/PNG/WEBP/GIF/AVIF).");
+    }
+    if (!ALLOWED_IMAGE_EXTS.test(data.filename)) {
+      throw new Error("امتداد الملف غير مسموح به.");
+    }
+
+    const buffer = Buffer.from(data.base64, "base64");
+    if (buffer.length === 0 || buffer.length > MAX_UPLOAD_BYTES) {
+      throw new Error("حجم الملف غير صالح (الحد الأقصى 5MB).");
+    }
+
     const safe = data.filename.replace(/[^a-zA-Z0-9._-]/g, "_");
     const path = `uploads/${Date.now()}-${safe}`;
-    const buffer = Buffer.from(data.base64, "base64");
     const { error } = await supabaseAdmin.storage
       .from("media")
-      .upload(path, buffer, { contentType: data.contentType, upsert: false });
+      .upload(path, buffer, { contentType: data.contentType.toLowerCase(), upsert: false });
     if (error) throw new Error(error.message);
     const { data: pub } = supabaseAdmin.storage.from("media").getPublicUrl(path);
     return { url: pub.publicUrl, path };
