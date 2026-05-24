@@ -9,12 +9,12 @@ import {
 } from "@/lib/catalog.functions";
 import {
   saveProduct, saveCategory, saveService, savePackage, saveWallet, saveContent,
-  adminDelete, uploadImage, listOrders, updateOrderStatus,
+  adminDelete, uploadImage, listOrders, updateOrderStatus, adminLogin,
 } from "@/lib/admin.functions";
 
-const ADMIN_PASSWORD = "zain20267731";
-const SESSION_KEY = "mycar_admin_session";
-const PWD_KEY = "mycar_admin_pwd";
+// Session token issued by the server-side `adminLogin` function. The actual
+// admin password is never stored in the client bundle or in browser storage.
+const TOKEN_KEY = "mycar_admin_token";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({ meta: [{ title: "لوحة التحكم — MY CAR" }, { name: "robots", content: "noindex" }] }),
@@ -24,31 +24,36 @@ export const Route = createFileRoute("/admin")({
 type Tab = "orders" | "products" | "categories" | "services" | "packages" | "wallets" | "content";
 
 function AdminPage() {
+  const login = useServerFn(adminLogin);
   const [authed, setAuthed] = useState(false);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && sessionStorage.getItem(SESSION_KEY) === "1") {
+    if (typeof window !== "undefined" && sessionStorage.getItem(TOKEN_KEY)) {
       setAuthed(true);
     }
   }, []);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === ADMIN_PASSWORD) {
-      sessionStorage.setItem(SESSION_KEY, "1");
-      sessionStorage.setItem(PWD_KEY, password);
+    setBusy(true);
+    setError("");
+    try {
+      const { token } = await login({ data: { password } });
+      sessionStorage.setItem(TOKEN_KEY, token);
       setAuthed(true);
-      setError("");
-    } else {
-      setError("كلمة المرور غير صحيحة");
+      setPassword("");
+    } catch (err) {
+      setError((err as Error).message || "كلمة المرور غير صحيحة");
+    } finally {
+      setBusy(false);
     }
   };
 
   const logout = () => {
-    sessionStorage.removeItem(SESSION_KEY);
-    sessionStorage.removeItem(PWD_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
     setAuthed(false);
     setPassword("");
   };
@@ -68,9 +73,12 @@ function AdminPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="كلمة المرور"
                 className="w-full border border-[var(--color-hairline)] rounded-lg px-3 py-2 outline-none focus:border-[var(--color-gold)]"
+                disabled={busy}
               />
               {error && <p className="text-sm text-red-600">{error}</p>}
-              <button type="submit" className="btn-gold w-full">دخول</button>
+              <button type="submit" disabled={busy} className="btn-gold w-full">
+                {busy ? "جاري التحقق..." : "دخول"}
+              </button>
             </form>
           </div>
         </div>
@@ -82,7 +90,10 @@ function AdminPage() {
 }
 
 function getPwd() {
-  return typeof window !== "undefined" ? sessionStorage.getItem(PWD_KEY) || "" : "";
+  // Returns the server-issued session token. Field name kept as "password"
+  // in the server fn API for backward compatibility — the server treats it
+  // as an HMAC-signed token, not a raw password.
+  return typeof window !== "undefined" ? sessionStorage.getItem(TOKEN_KEY) || "" : "";
 }
 
 function AdminDashboard({ onLogout }: { onLogout: () => void }) {
