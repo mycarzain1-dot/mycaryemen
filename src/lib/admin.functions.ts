@@ -8,9 +8,9 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 8; // 8 hours
 
 function getAdminPassword(): string {
-  // Server-only env var. Falls back to legacy value only if not set, but the
-  // user is asked to set ADMIN_PASSWORD as a secret in Lovable Cloud.
-  return process.env.ADMIN_PASSWORD || "zain20267731";
+  const pwd = process.env.ADMIN_PASSWORD;
+  if (!pwd) throw new Error("Server misconfigured: ADMIN_PASSWORD not set");
+  return pwd;
 }
 
 function getSessionSecret(): string {
@@ -99,15 +99,38 @@ export const createOrder = createServerFn({ method: "POST" })
     }).parse(d),
   )
   .handler(async ({ data }) => {
-    // Server-trusted total — never trust client-supplied prices alone.
-    const subtotal = data.items.reduce((s, i) => s + i.price * i.qty, 0);
+    // Server-trusted prices — fetch from DB, never trust client-supplied prices.
+    const productIds = data.items.map((i) => i.id);
+    const { data: dbProducts, error: pErr } = await supabaseAdmin
+      .from("products")
+      .select("id, name, price, images")
+      .in("id", productIds);
+    if (pErr) {
+      console.error("[createOrder] product lookup error:", pErr);
+      throw new Error("تعذّر إنشاء الطلب، الرجاء المحاولة لاحقاً");
+    }
+    const priceMap = new Map((dbProducts ?? []).map((p) => [p.id, p]));
+
+    const trustedItems = data.items.map((i) => {
+      const p = priceMap.get(i.id);
+      if (!p) throw new Error("منتج غير متوفر، الرجاء تحديث السلة");
+      return {
+        id: p.id,
+        name: p.name,
+        price: Number(p.price),
+        qty: i.qty,
+        image: (p.images && p.images[0]) || i.image,
+      };
+    });
+    const subtotal = trustedItems.reduce((s, i) => s + i.price * i.qty, 0);
+
     const { data: row, error } = await supabaseAdmin
       .from("orders")
       .insert({
         customer_name: data.customer_name,
         phone: data.phone,
         address: data.address ?? null,
-        items: data.items,
+        items: trustedItems,
         subtotal,
         total: subtotal,
         wallet_id: data.wallet_id ?? null,
@@ -117,7 +140,10 @@ export const createOrder = createServerFn({ method: "POST" })
       })
       .select("id")
       .single();
-    if (error) throw new Error(error.message);
+    if (error) {
+      console.error("[createOrder] DB error:", error);
+      throw new Error("تعذّر إنشاء الطلب، الرجاء المحاولة لاحقاً");
+    }
     return { id: row!.id };
   });
 
@@ -130,7 +156,7 @@ export const listOrders = createServerFn({ method: "POST" })
       .select("*")
       .order("created_at", { ascending: false })
       .limit(200);
-    if (error) throw new Error(error.message);
+    if (error) { console.error("[server] DB error:", error); throw new Error("حدث خطأ، الرجاء المحاولة لاحقاً"); }
     return rows ?? [];
   });
 
@@ -145,7 +171,7 @@ export const updateOrderStatus = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     assertAdmin(data.password);
     const { error } = await supabaseAdmin.from("orders").update({ status: data.status }).eq("id", data.id);
-    if (error) throw new Error(error.message);
+    if (error) { console.error("[server] DB error:", error); throw new Error("حدث خطأ، الرجاء المحاولة لاحقاً"); }
     return { ok: true };
   });
 
@@ -166,7 +192,7 @@ export const adminDelete = createServerFn({ method: "POST" })
     const col = data.table === "site_content" ? "key" : "id";
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (supabaseAdmin.from(data.table) as any).delete().eq(col, data.id);
-    if (error) throw new Error(error.message);
+    if (error) { console.error("[server] DB error:", error); throw new Error("حدث خطأ، الرجاء المحاولة لاحقاً"); }
     return { ok: true };
   });
 
@@ -195,10 +221,10 @@ export const saveProduct = createServerFn({ method: "POST" })
     assertAdmin(data.password);
     if (data.id) {
       const { error } = await supabaseAdmin.from("products").update(data.data).eq("id", data.id);
-      if (error) throw new Error(error.message);
+      if (error) { console.error("[server] DB error:", error); throw new Error("حدث خطأ، الرجاء المحاولة لاحقاً"); }
     } else {
       const { error } = await supabaseAdmin.from("products").insert(data.data);
-      if (error) throw new Error(error.message);
+      if (error) { console.error("[server] DB error:", error); throw new Error("حدث خطأ، الرجاء المحاولة لاحقاً"); }
     }
     return { ok: true };
   });
@@ -224,10 +250,10 @@ export const saveCategory = createServerFn({ method: "POST" })
     assertAdmin(data.password);
     if (data.id) {
       const { error } = await supabaseAdmin.from("categories").update(data.data).eq("id", data.id);
-      if (error) throw new Error(error.message);
+      if (error) { console.error("[server] DB error:", error); throw new Error("حدث خطأ، الرجاء المحاولة لاحقاً"); }
     } else {
       const { error } = await supabaseAdmin.from("categories").insert(data.data);
-      if (error) throw new Error(error.message);
+      if (error) { console.error("[server] DB error:", error); throw new Error("حدث خطأ، الرجاء المحاولة لاحقاً"); }
     }
     return { ok: true };
   });
@@ -255,10 +281,10 @@ export const saveService = createServerFn({ method: "POST" })
     assertAdmin(data.password);
     if (data.id) {
       const { error } = await supabaseAdmin.from("service_categories").update(data.data).eq("id", data.id);
-      if (error) throw new Error(error.message);
+      if (error) { console.error("[server] DB error:", error); throw new Error("حدث خطأ، الرجاء المحاولة لاحقاً"); }
     } else {
       const { error } = await supabaseAdmin.from("service_categories").insert(data.data);
-      if (error) throw new Error(error.message);
+      if (error) { console.error("[server] DB error:", error); throw new Error("حدث خطأ، الرجاء المحاولة لاحقاً"); }
     }
     return { ok: true };
   });
@@ -283,10 +309,10 @@ export const saveWallet = createServerFn({ method: "POST" })
     assertAdmin(data.password);
     if (data.id) {
       const { error } = await supabaseAdmin.from("wallets").update(data.data).eq("id", data.id);
-      if (error) throw new Error(error.message);
+      if (error) { console.error("[server] DB error:", error); throw new Error("حدث خطأ، الرجاء المحاولة لاحقاً"); }
     } else {
       const { error } = await supabaseAdmin.from("wallets").insert(data.data);
-      if (error) throw new Error(error.message);
+      if (error) { console.error("[server] DB error:", error); throw new Error("حدث خطأ، الرجاء المحاولة لاحقاً"); }
     }
     return { ok: true };
   });
@@ -316,10 +342,10 @@ export const savePackage = createServerFn({ method: "POST" })
     assertAdmin(data.password);
     if (data.id) {
       const { error } = await supabaseAdmin.from("packages").update(data.data).eq("id", data.id);
-      if (error) throw new Error(error.message);
+      if (error) { console.error("[server] DB error:", error); throw new Error("حدث خطأ، الرجاء المحاولة لاحقاً"); }
     } else {
       const { error } = await supabaseAdmin.from("packages").insert(data.data);
-      if (error) throw new Error(error.message);
+      if (error) { console.error("[server] DB error:", error); throw new Error("حدث خطأ، الرجاء المحاولة لاحقاً"); }
     }
     return { ok: true };
   });
@@ -345,7 +371,7 @@ export const saveContent = createServerFn({ method: "POST" })
     const { error } = await supabaseAdmin
       .from("site_content")
       .upsert({ key: data.key, value: data.value as never }, { onConflict: "key" });
-    if (error) throw new Error(error.message);
+    if (error) { console.error("[server] DB error:", error); throw new Error("حدث خطأ، الرجاء المحاولة لاحقاً"); }
     return { ok: true };
   });
 
@@ -391,7 +417,7 @@ export const uploadImage = createServerFn({ method: "POST" })
     const { error } = await supabaseAdmin.storage
       .from("media")
       .upload(path, buffer, { contentType: data.contentType.toLowerCase(), upsert: false });
-    if (error) throw new Error(error.message);
+    if (error) { console.error("[server] DB error:", error); throw new Error("حدث خطأ، الرجاء المحاولة لاحقاً"); }
     const { data: pub } = supabaseAdmin.storage.from("media").getPublicUrl(path);
     return { url: pub.publicUrl, path };
   });
