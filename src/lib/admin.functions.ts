@@ -99,15 +99,38 @@ export const createOrder = createServerFn({ method: "POST" })
     }).parse(d),
   )
   .handler(async ({ data }) => {
-    // Server-trusted total — never trust client-supplied prices alone.
-    const subtotal = data.items.reduce((s, i) => s + i.price * i.qty, 0);
+    // Server-trusted prices — fetch from DB, never trust client-supplied prices.
+    const productIds = data.items.map((i) => i.id);
+    const { data: dbProducts, error: pErr } = await supabaseAdmin
+      .from("products")
+      .select("id, name, price, images")
+      .in("id", productIds);
+    if (pErr) {
+      console.error("[createOrder] product lookup error:", pErr);
+      throw new Error("تعذّر إنشاء الطلب، الرجاء المحاولة لاحقاً");
+    }
+    const priceMap = new Map((dbProducts ?? []).map((p) => [p.id, p]));
+
+    const trustedItems = data.items.map((i) => {
+      const p = priceMap.get(i.id);
+      if (!p) throw new Error("منتج غير متوفر، الرجاء تحديث السلة");
+      return {
+        id: p.id,
+        name: p.name,
+        price: Number(p.price),
+        qty: i.qty,
+        image: (p.images && p.images[0]) || i.image,
+      };
+    });
+    const subtotal = trustedItems.reduce((s, i) => s + i.price * i.qty, 0);
+
     const { data: row, error } = await supabaseAdmin
       .from("orders")
       .insert({
         customer_name: data.customer_name,
         phone: data.phone,
         address: data.address ?? null,
-        items: data.items,
+        items: trustedItems,
         subtotal,
         total: subtotal,
         wallet_id: data.wallet_id ?? null,
@@ -117,7 +140,10 @@ export const createOrder = createServerFn({ method: "POST" })
       })
       .select("id")
       .single();
-    if (error) throw new Error(error.message);
+    if (error) {
+      console.error("[createOrder] DB error:", error);
+      throw new Error("تعذّر إنشاء الطلب، الرجاء المحاولة لاحقاً");
+    }
     return { id: row!.id };
   });
 
