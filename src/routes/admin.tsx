@@ -107,6 +107,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
     { id: "services", label: "الخدمات" },
     { id: "packages", label: "البكجات" },
     { id: "wallets", label: "المحافظ" },
+    { id: "reviews", label: "التقييمات" },
     { id: "content", label: "المحتوى" },
   ];
 
