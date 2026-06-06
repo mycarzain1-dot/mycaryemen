@@ -145,6 +145,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
           {tab === "services" && <ServicesPanel />}
           {tab === "packages" && <PackagesPanel />}
           {tab === "wallets" && <WalletsPanel />}
+          {tab === "reviews" && <ReviewsPanel />}
           {tab === "content" && <ContentPanel />}
         </div>
       </div>
