@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { Shell } from "@/components/layout/Shell";
 import { ProductCard } from "@/components/shop/ProductCard";
+import { ProductsCarousel } from "@/components/shop/ProductsCarousel";
 import { getCategories, getProducts, getPackages } from "@/lib/catalog.functions";
 import { heroImage } from "@/lib/asset-map";
 
@@ -128,10 +129,13 @@ function HomePage() {
       {/* BEST SELLERS */}
       <section className="max-w-7xl mx-auto px-4 py-8">
         <SectionTitle title="الأكثر مبيعاً" subtitle="منتجات يثق بها عملاؤنا" />
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-5 mt-6">
+        <div className="hidden md:grid md:grid-cols-4 gap-5 mt-6">
           {bestSellers.map((p) => (
             <ProductCard key={p.id} p={p} />
           ))}
+        </div>
+        <div className="mt-6">
+          <ProductsCarousel products={bestSellers} />
         </div>
         <div className="mt-6 text-center">
           <Link to="/shop" className="btn-outline">عرض جميع المنتجات</Link>
