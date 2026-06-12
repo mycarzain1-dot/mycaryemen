@@ -269,7 +269,8 @@ function ImageUploader({ onUploaded }: { onUploaded: (url: string) => void }) {
 /* ===================== Products ===================== */
 type ProductRow = {
   id: string; name: string; description: string | null; price: number;
-  old_price: number | null; images: string[]; is_bestseller: boolean; category_id: string | null;
+  old_price: number | null; images: string[]; is_bestseller: boolean;
+  is_featured: boolean; category_id: string | null;
 };
 
 function ProductsPanel() {
@@ -285,6 +286,7 @@ function ProductsPanel() {
   const refresh = useCallback(() => {
     qc.invalidateQueries({ queryKey: ["admin-products"] });
     qc.invalidateQueries({ queryKey: ["products"] });
+    qc.invalidateQueries({ queryKey: ["featured-products"] });
   }, [qc]);
 
   const onDelete = async (id: string) => {
@@ -297,7 +299,7 @@ function ProductsPanel() {
     <div>
       <div className="flex justify-between mb-4">
         <h2 className="font-bold text-lg">المنتجات ({products.length})</h2>
-        <button onClick={() => setEditing({ images: [], is_bestseller: false })} className="btn-gold"><Plus className="w-4 h-4" /> منتج جديد</button>
+        <button onClick={() => setEditing({ images: [], is_bestseller: false, is_featured: false })} className="btn-gold"><Plus className="w-4 h-4" /> منتج جديد</button>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {products.map((p) => (
@@ -306,6 +308,10 @@ function ProductsPanel() {
             <div className="flex-1 min-w-0">
               <div className="font-bold text-sm truncate">{p.name}</div>
               <div className="text-[var(--color-gold)] font-bold text-sm">{Number(p.price).toLocaleString()} ر.ي</div>
+              <div className="flex gap-1 mt-1 flex-wrap">
+                {p.is_bestseller && <span className="text-[10px] bg-[var(--color-gold-soft)] text-[var(--color-ink)] px-1.5 py-0.5 rounded">الأكثر مبيعاً</span>}
+                {(p as ProductRow).is_featured && <span className="text-[10px] bg-[var(--color-gold)] text-[var(--color-ink)] px-1.5 py-0.5 rounded">مميز</span>}
+              </div>
             </div>
             <div className="flex flex-col gap-1">
               <button onClick={() => setEditing(p as ProductRow)} className="p-2 text-[var(--color-gold)]"><Pencil className="w-4 h-4" /></button>
@@ -335,7 +341,7 @@ function ProductsPanel() {
 function ProductForm({ initial, categories, onSave }: {
   initial: Partial<ProductRow>;
   categories: { id: string; name: string }[];
-  onSave: (d: { name: string; description: string | null; price: number; old_price: number | null; images: string[]; category_id: string | null; is_bestseller: boolean }) => Promise<void>;
+  onSave: (d: { name: string; description: string | null; price: number; old_price: number | null; images: string[]; category_id: string | null; is_bestseller: boolean; is_featured: boolean }) => Promise<void>;
 }) {
   const [name, setName] = useState(initial.name || "");
   const [desc, setDesc] = useState(initial.description || "");
@@ -344,6 +350,7 @@ function ProductForm({ initial, categories, onSave }: {
   const [images, setImages] = useState<string[]>(initial.images || []);
   const [catId, setCatId] = useState(initial.category_id || "");
   const [bestseller, setBestseller] = useState(initial.is_bestseller || false);
+  const [featured, setFeatured] = useState(initial.is_featured || false);
   const [busy, setBusy] = useState(false);
 
   return (
@@ -353,7 +360,8 @@ function ProductForm({ initial, categories, onSave }: {
         await onSave({
           name, description: desc || null, price: Number(price),
           old_price: oldPrice ? Number(oldPrice) : null,
-          images, category_id: catId || null, is_bestseller: bestseller,
+          images, category_id: catId || null,
+          is_bestseller: bestseller, is_featured: featured,
         });
       } catch (err) { alert((err as Error).message); }
       setBusy(false);
@@ -365,10 +373,16 @@ function ProductForm({ initial, categories, onSave }: {
         <Input label="السعر القديم (مشطوب)" type="number" value={oldPrice} onChange={setOldPrice} />
       </div>
       <Select label="القسم" value={catId} onChange={setCatId} options={[{ value: "", label: "بدون قسم" }, ...categories.map((c) => ({ value: c.id, label: c.name }))]} />
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={bestseller} onChange={(e) => setBestseller(e.target.checked)} className="accent-[var(--color-gold)]" />
-        الأكثر مبيعاً
-      </label>
+      <div className="flex flex-wrap gap-4">
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={bestseller} onChange={(e) => setBestseller(e.target.checked)} className="accent-[var(--color-gold)]" />
+          الأكثر مبيعاً
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={featured} onChange={(e) => setFeatured(e.target.checked)} className="accent-[var(--color-gold)]" />
+          منتج مميز (يظهر في السلايدر)
+        </label>
+      </div>
       <ImagesField images={images} onChange={setImages} />
       <button type="submit" disabled={busy} className="btn-gold w-full">{busy ? "جاري الحفظ..." : "حفظ"}</button>
     </form>
