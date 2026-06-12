@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Search, Heart, User, ShoppingCart } from "lucide-react";
 import { useCart } from "@/lib/cart";
+import { ThemeToggle } from "./ThemeToggle";
 
 export function Header() {
   const { count } = useCart();
@@ -28,6 +29,7 @@ export function Header() {
         </div>
 
         <div className="flex items-center gap-1 mr-auto md:mr-0">
+          <ThemeToggle />
           <button className="p-2 rounded-full hover:bg-[var(--color-surface)]" aria-label="المفضلة">
             <Heart className="w-5 h-5 text-[var(--color-gold)]" />
           </button>
