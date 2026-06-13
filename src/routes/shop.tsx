@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Shell } from "@/components/layout/Shell";
 import { ProductCard } from "@/components/shop/ProductCard";
 import { getCategories, getProducts } from "@/lib/catalog.functions";
@@ -9,7 +9,7 @@ import { z } from "zod";
 const catsQO = queryOptions({ queryKey: ["categories"], queryFn: () => getCategories() });
 const productsQO = queryOptions({ queryKey: ["products"], queryFn: () => getProducts() });
 
-const searchSchema = z.object({ cat: z.string().optional() });
+const searchSchema = z.object({ cat: z.string().optional(), q: z.string().optional() });
 
 export const Route = createFileRoute("/shop")({
   head: () => ({
@@ -35,7 +35,11 @@ function ShopPage() {
   const { data: cats } = useSuspenseQuery(catsQO);
   const { data: products } = useSuspenseQuery(productsQO);
   const [activeSlug, setActiveSlug] = useState<string | undefined>(search.cat);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(search.q ?? "");
+
+  useEffect(() => {
+    setQuery(search.q ?? "");
+  }, [search.q]);
 
   const activeId = cats.find((c) => c.slug === activeSlug)?.id;
   const q = query.trim().toLowerCase();
