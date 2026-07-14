@@ -3,12 +3,10 @@ import { z } from "zod";
 
 const PartSchema = z.object({
   text: z.string().optional(),
-  inlineData: z
-    .object({
-      mimeType: z.string(),
-      data: z.string(),
-    })
-    .optional(),
+  inlineData: z.object({
+    mimeType: z.string(),
+    data: z.string(),
+  }).optional(),
 });
 
 const MessageSchema = z.object({
@@ -20,42 +18,58 @@ const InputSchema = z.object({
   messages: z.array(MessageSchema).min(1),
 });
 
-const SYSTEM_INSTRUCTION = `أنت المساعد الذكي 'زين للسيارات'، خبير ومصمم محترف في هندسة وتعديل السيارات بجميع أنواعها وموديلاتها.
-وظيفتك الأساسية:
-- استقبال صور سيارات العملاء وفهم نوعها، موديلها، لونها، والزوايا المصورة بدقة متناهية.
-- تقديم نصائح تقنية وجمالية مخصصة لنوع السيارة المعروضة حول الإكسسوارات والقطع الأنسب لها (مثل الجنوط، الإضاءات، التظليل، الجناح الخلفي، الشاشات الداخلية).
-- عند رفع العميل لصورة سيارته وطلب تجربة منتج معين عليها، استخدم قدراتك كنموذج بصري (Vision Model) لتحليل الصورة وإيجاد أفضل طريقة لتركيب ودمج المنتج وتعديل شكل السيارة لتبدو واقعية واحترافية بأقصى جودة ممكنة ومشاركتها مع العميل لشرح الفكرة له.
-- تحدث بلغة عربية سهلة، ودودة، ومحفزة للعميل على الشراء والتعديل.`;
+const SYSTEM_INSTRUCTION = `
+أنت المساعد الذكي "زين للسيارات"، خبير في تعديل السيارات والإكسسوارات.
+أجب بالعربية وبأسلوب ودود ومختصر.
+`;
 
 export const chatWithGemini = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => InputSchema.parse(data))
   .handler(async ({ data }) => {
-    // تم تقسيم المفتاح لتجاوز نظام الأمان في GitHub بنجاح
-    const keyPart1 = "AQ.Ab8RN6LUh7esLI6oz3NPyj1TVanZhP";
-    const keyPart2 = "99_1ZEHrMJc_awMLm1jw";
-    const apiKey = keyPart1 + keyPart2;
+    const apiKey = process.env.GEMINI_API_KEY;
 
-    // استخدام النموذج المجاني والمستقر
-    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: data.messages,
-        systemInstruction: { role: "system", parts: [{ text: SYSTEM_INSTRUCTION }] },
-        generationConfig: { temperature: 0.8, maxOutputTokens: 2048 },
-      }),
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Gemini API error [${res.status}]: ${text}`);
+    if (!apiKey) {
+      return {
+        reply: "❌ متغير GEMINI_API_KEY غير موجود."
+      };
     }
 
-    const json = (await res.json()) as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+    const res = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": apiKey,
+        },
+        body: JSON.stringify({
+          systemInstruction: {
+            parts: [{ text: SYSTEM_INSTRUCTION }]
+          },
+          contents: data.messages,
+          generationConfig: {
+            temperature: 0.8,
+            maxOutputTokens: 2048,
+          },
+        }),
+      }
+    );
+
+    const body = await res.text();
+
+    if (!res.ok) {
+      console.error(body);
+      return {
+        reply: `❌ Gemini Error (${res.status})\n${body}`,
+      };
+    }
+
+    const json = JSON.parse(body);
+
+    return {
+      reply:
+        json.candidates?.[0]?.content?.parts
+          ?.map((p: any) => p.text ?? "")
+          .join("") || "لا يوجد رد.",
     };
-    const reply = json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
-    return { reply };
   });
