@@ -3,10 +3,12 @@ import { z } from "zod";
 
 const PartSchema = z.object({
   text: z.string().optional(),
-  inlineData: z.object({
-    mimeType: z.string(),
-    data: z.string(),
-  }).optional(),
+  inlineData: z
+    .object({
+      mimeType: z.string(),
+      data: z.string(),
+    })
+    .optional(),
 });
 
 const MessageSchema = z.object({
@@ -18,10 +20,7 @@ const InputSchema = z.object({
   messages: z.array(MessageSchema).min(1),
 });
 
-const SYSTEM_INSTRUCTION = `
-أنت المساعد الذكي "زين للسيارات"، خبير في تعديل السيارات والإكسسوارات.
-أجب بالعربية وبأسلوب ودود ومختصر.
-`;
+const SYSTEM_INSTRUCTION = `أنت المساعد الذكي "زين للسيارات"، خبير في تعديل السيارات وتحليل الصور والإجابة باللغة العربية.`;
 
 export const chatWithGemini = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => InputSchema.parse(data))
@@ -30,21 +29,21 @@ export const chatWithGemini = createServerFn({ method: "POST" })
 
     if (!apiKey) {
       return {
-        reply: "❌ متغير GEMINI_API_KEY غير موجود."
+        reply: "❌ لم يتم العثور على GEMINI_API_KEY داخل بيئة المشروع.",
       };
     }
 
-    const res = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+    const response = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-goog-api-key": apiKey,
+          "X-Goog-Api-Key": apiKey,
         },
         body: JSON.stringify({
           systemInstruction: {
-            parts: [{ text: SYSTEM_INSTRUCTION }]
+            parts: [{ text: SYSTEM_INSTRUCTION }],
           },
           contents: data.messages,
           generationConfig: {
@@ -55,12 +54,13 @@ export const chatWithGemini = createServerFn({ method: "POST" })
       }
     );
 
-    const body = await res.text();
+    const body = await response.text();
 
-    if (!res.ok) {
+    if (!response.ok) {
       console.error(body);
+
       return {
-        reply: `❌ Gemini Error (${res.status})\n${body}`,
+        reply: `Gemini Error (${response.status})\n${body}`,
       };
     }
 
@@ -70,6 +70,6 @@ export const chatWithGemini = createServerFn({ method: "POST" })
       reply:
         json.candidates?.[0]?.content?.parts
           ?.map((p: any) => p.text ?? "")
-          .join("") || "لا يوجد رد.",
+          .join("") || "لم يتم الحصول على رد.",
     };
   });
