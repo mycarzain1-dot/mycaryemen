@@ -99,6 +99,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 import { CartProvider } from "@/lib/cart";
+import { FloatingChat } from "@/components/chat/FloatingChat";
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
@@ -106,7 +107,9 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <CartProvider>
         <Outlet />
+        <FloatingChat />
       </CartProvider>
     </QueryClientProvider>
   );
 }
+
